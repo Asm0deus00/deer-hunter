@@ -1,0 +1,27 @@
+# Unity
+Library/
+Temp/
+Obj/
+Build/
+Builds/
+Logs/
+UserSettings/
+MemorySnapshot/
+*.csproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.pdb
+*.mdb
+
+# Visual Studio
+.vs/
+
+# macOS
+.DS_Store
+
+# JetBrains Rider
+.idea/
