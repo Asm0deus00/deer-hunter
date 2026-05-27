@@ -119,6 +119,50 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &96198201
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 96198202}
+  - component: {fileID: 96198203}
+  m_Layer: 0
+  m_Name: PauseMenuManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &96198202
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 96198201}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2071802082}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &96198203
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 96198201}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8b2d97fa2088a449a10abac404b7f17, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Pausemenumanager
 --- !u!1 &125414217
 GameObject:
   m_ObjectHideFlags: 0
@@ -641,6 +685,7 @@ MonoBehaviour:
   styleWordLabel: {fileID: 0}
   styleFillBar: {fileID: 0}
   rankBackgroundImg: {fileID: 0}
+  styleFillImage: {fileID: 0}
 --- !u!1 &646685772
 GameObject:
   m_ObjectHideFlags: 0
@@ -686,15 +731,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StyleBar
   rankLabel: {fileID: 0}
-  styleFillBar: {fileID: 0}
   styleWordLabel: {fileID: 0}
+  styleFillBar: {fileID: 0}
   rankBackgroundImg: {fileID: 0}
+  styleFillImage: {fileID: 0}
   drainRate: 40
   drainDelay: 2.5
   maxPoints: 2500
-  comboMultiplier: 1
-  multiplierIncrement: 0.1
-  multiplierDecayDelay: 1.5
   multiplierMax: 4
 --- !u!1 &705507993
 GameObject:
@@ -1963,6 +2006,7 @@ Transform:
   - {fileID: 1297909385}
   - {fileID: 646685773}
   - {fileID: 638704191}
+  - {fileID: 96198202}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2139212863
