@@ -64,10 +64,14 @@ public class DeerSpawner : MonoBehaviour
 
         scoreManager = FindFirstObjectByType<ScoreManager>();
 
+        // Log either way so we can always see this in the Console
+        Debug.Log("[DeerSpawner] Start() — deerPrefab=" + (deerPrefab != null ? deerPrefab.name : "NULL")
+            + "  playerTf=" + (playerTf != null ? playerTf.name : "NULL")
+            + "  scoreManager=" + (scoreManager != null ? "found" : "NULL"));
+
         if (!deerPrefab)
         {
-            Debug.LogError("DeerSpawner: no deerPrefab assigned!");
-            enabled = false;
+            Debug.LogError("[DeerSpawner] deerPrefab is NULL — drag your Deer prefab into the DeerSpawner component in the Inspector!");
             return;
         }
 
@@ -93,6 +97,7 @@ public class DeerSpawner : MonoBehaviour
     {
         // Short initial delay so the scene finishes loading
         yield return new WaitForSeconds(2f);
+        Debug.Log("[DeerSpawner] SpawnLoop started. deerPrefab=" + deerPrefab + " playerTf=" + playerTf);
 
         while (roundActive)
         {
@@ -112,9 +117,14 @@ public class DeerSpawner : MonoBehaviour
     void SpawnOne(float progressT)
     {
         Vector3 spawnPos = GetSpawnPosition();
+        Debug.Log("[DeerSpawner] spawnPos=" + spawnPos);
         if (spawnPos == Vector3.zero) return;
 
-        GameObject obj = Instantiate(deerPrefab, spawnPos, Quaternion.Euler(0, Random.Range(0f, 360f), 0));
+        // Spawn using whatever rotation the prefab was saved with (X=-90 if model is flat)
+        // Y is randomised so each deer faces a different direction.
+        Quaternion spawnRot = deerPrefab.transform.rotation;
+        spawnRot = Quaternion.Euler(spawnRot.eulerAngles.x, Random.Range(0f, 360f), spawnRot.eulerAngles.z);
+        GameObject obj = Instantiate(deerPrefab, spawnPos, spawnRot);
         DeerAI deer = obj.GetComponent<DeerAI>();
         if (!deer) { Destroy(obj); return; }
 
@@ -148,18 +158,40 @@ public class DeerSpawner : MonoBehaviour
 
         // Fall back to random position around center
         Transform center = autoSpawnCenter ?? transform;
-        for (int attempt = 0; attempt < 10; attempt++)
+        for (int attempt = 0; attempt < 20; attempt++)
         {
-            Vector2 rand2D  = Random.insideUnitCircle.normalized * autoSpawnRadius;
-            Vector3 candidate = center.position + new Vector3(rand2D.x, 0, rand2D.y);
+            Vector2 rand2D    = Random.insideUnitCircle.normalized * autoSpawnRadius;
+            // Start candidate at center height so the raycast origin is always above ground
+            Vector3 candidate = new Vector3(
+                center.position.x + rand2D.x,
+                center.position.y,
+                center.position.z + rand2D.y);
 
             if (playerTf && Vector3.Distance(candidate, playerTf.position) < minDistToPlayer)
                 continue;
 
-            // Raycast down to place on terrain/floor
-            if (Physics.Raycast(candidate + Vector3.up * 20f, Vector3.down, out RaycastHit hit, 40f))
-                return hit.point + Vector3.up * 0.1f;
+            // Don't spawn on top of existing deer
+            bool tooClose = false;
+            foreach (var d in aliveDeer)
+            {
+                if (d != null && Vector3.Distance(candidate, d.transform.position) < 3f)
+                { tooClose = true; break; }
+            }
+            if (tooClose) continue;
+
+            // Cast from well above the candidate down a long distance to hit any floor
+            Vector3 rayOrigin = candidate + Vector3.up * 100f;
+            Debug.Log("[DeerSpawner] Raycast from " + rayOrigin + " down 200");
+            if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 200f))
+            {
+                Debug.Log("[DeerSpawner] Hit " + hit.collider.name + " at " + hit.point);
+                return hit.point + Vector3.up * 1.2f;
+            }
         }
+
+        Debug.LogWarning("[DeerSpawner] Could not find a valid spawn position. " +
+            "Make sure the DeerSpawner GameObject is placed at the same height as your map, " +
+            "the map colliders are active, and autoSpawnRadius covers the play area.");
 
         return Vector3.zero; // failed to find a spot
     }

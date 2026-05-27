@@ -207,7 +207,7 @@ public class GunScript : MonoBehaviour {
 	 * If we are not reloading we can trigger the MeeleAttack animation from the IENumerator.
 	 */
 	void MeeleAnimationsStates(){
-		if (handsAnimator) {
+		if (handsAnimator && handsAnimator.runtimeAnimatorController) {
 			meeleAttack = handsAnimator.GetCurrentAnimatorStateInfo (0).IsName (meeleAnimationName);
 			aiming = handsAnimator.GetCurrentAnimatorStateInfo (0).IsName (aimingAnimationName);	
 		}
@@ -225,10 +225,9 @@ public class GunScript : MonoBehaviour {
 	* Sets meele animation to play.
 	*/
 	IEnumerator AnimationMeeleAttack(){
-		handsAnimator.SetBool("meeleAttack",true);
-		//yield return new WaitForEndOfFrame();
+		if (handsAnimator && handsAnimator.runtimeAnimatorController) handsAnimator.SetBool("meeleAttack",true);
 		yield return new WaitForSeconds(0.1f);
-		handsAnimator.SetBool("meeleAttack",false);
+		if (handsAnimator && handsAnimator.runtimeAnimatorController) handsAnimator.SetBool("meeleAttack",false);
 	}
 
 	private float startLook, startAim, startRun;
@@ -578,7 +577,7 @@ public class GunScript : MonoBehaviour {
 	*/
 	void Animations(){
 
-		if(handsAnimator){
+		if(handsAnimator && handsAnimator.runtimeAnimatorController){
 
 			reloading = handsAnimator.GetCurrentAnimatorStateInfo(0).IsName(reloadAnimationName);
 

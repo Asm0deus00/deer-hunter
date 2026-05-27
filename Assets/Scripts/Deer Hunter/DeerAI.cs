@@ -74,7 +74,7 @@ public class DeerAI : MonoBehaviour
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        rb.constraints = RigidbodyConstraints.FreezeRotation;
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ | RigidbodyConstraints.FreezePositionY;
 
         currentHealth = maxHealth;
 
@@ -137,9 +137,9 @@ public class DeerAI : MonoBehaviour
         Vector3 dir = (player.position - transform.position).normalized;
         dir.y = 0;
         rb.linearVelocity = new Vector3(dir.x * moveSpeed, rb.linearVelocity.y, dir.z * moveSpeed);
-        // Face player
+        // Face player — only rotate on Y, preserving the X=-90 tilt of the prefab
         transform.rotation = Quaternion.Slerp(transform.rotation,
-            Quaternion.LookRotation(dir), Time.deltaTime * 8f);
+            YLook(dir), Time.deltaTime * 8f);
     }
 
     void AttackBehavior()
@@ -159,7 +159,7 @@ public class DeerAI : MonoBehaviour
             dir.y = 0;
             if (dir != Vector3.zero)
                 transform.rotation = Quaternion.Slerp(transform.rotation,
-                    Quaternion.LookRotation(dir), Time.deltaTime * 6f);
+                    YLook(dir), Time.deltaTime * 6f);
 
             if (shootTimer <= 0f)
                 FireGun();
@@ -341,4 +341,15 @@ public class DeerAI : MonoBehaviour
     // ── Public helpers ───────────────────────────────────────────
     public float HealthPercent => currentHealth / maxHealth;
     public bool  IsDead        => isDead;
+
+    // Rotate only on the world Y axis, keeping the root's X tilt intact.
+    // Used because the prefab is spawned at X=-90 (model lies flat on ground).
+    Quaternion YLook(Vector3 dir)
+    {
+        dir.y = 0f;
+        if (dir.sqrMagnitude < 0.001f) return transform.rotation;
+        float yAngle = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+        return Quaternion.Euler(transform.eulerAngles.x, yAngle, transform.eulerAngles.z);
+    }
+
 }

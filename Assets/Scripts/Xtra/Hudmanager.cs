@@ -6,50 +6,35 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// HUDManager — builds and drives the entire in-game HUD at runtime.
-/// No manual Canvas setup needed. Just attach this script to any empty
-/// GameObject in your scene and press Play.
-///
-/// What it creates at runtime:
-///   Canvas (Screen Space – Overlay)
-///   ├─ HitVignette        full-screen red flash on damage
-///   ├─ TopBar             timer (centre), score (right), kills (left)
-///   ├─ BottomLeft         health bar + HP text
-///   ├─ BottomRight        grenade counter
-///   ├─ StylePanel         rank letter + word + fill bar (left-centre)
-///   ├─ PopupScore         floating "+points" label
-///   ├─ DeathScreen        dark overlay + "YOU DIED" + score + restart hint
-///   └─ RoundEndScreen     dark overlay + final score + kills + restart button
+/// Attach to any empty GameObject in your scene. No manual Canvas needed.
 /// </summary>
 public class HUDManager : MonoBehaviour
 {
-    // ── References wired during Build() ──────────────────────────
-    private TMP_Text  scoreText;
-    private TMP_Text  killCountText;
-    private TMP_Text  timerText;
-    private TMP_Text  grenadeText;
-    private TMP_Text  popupText;
-    private Slider    healthSlider;
-    private TMP_Text  healthText;
-    private Image     hitVignette;
+    // ── References built during BuildHUD() ───────────────────────
+    private TextMeshProUGUI scoreText;
+    private TextMeshProUGUI killCountText;
+    private TextMeshProUGUI timerText;
+    private TextMeshProUGUI grenadeText;
+    private TextMeshProUGUI popupTMP;
+    private Slider          healthSlider;
+    private TextMeshProUGUI healthText;
+    private Image           hitVignetteImg;
+    private RectTransform   popupRect;
 
-    // Style bar (also used by StyleBar.cs directly via public refs it finds at runtime)
-    [HideInInspector] public TMP_Text  rankLabel;
-    [HideInInspector] public TMP_Text  styleWordLabel;
-    [HideInInspector] public Slider    styleFillBar;
-    [HideInInspector] public Image     rankBackgroundImg;
+    // Style panel — injected into StyleBar at Start()
+    [HideInInspector] public TextMeshProUGUI rankLabel;
+    [HideInInspector] public TextMeshProUGUI styleWordLabel;
+    [HideInInspector] public Slider          styleFillBar;
+    [HideInInspector] public Image           rankBackgroundImg;
 
-    private GameObject deathScreen;
-    private TMP_Text   deathScoreText;
-    private GameObject roundEndScreen;
-    private TMP_Text   finalScoreText;
-    private TMP_Text   finalKillsText;
+    private GameObject      deathScreen;
+    private TextMeshProUGUI deathScoreText;
+    private GameObject      roundEndScreen;
+    private TextMeshProUGUI finalScoreText;
+    private TextMeshProUGUI finalKillsText;
 
-    private RectTransform popupAnchor;
-    private Coroutine     popupRoutine;
-
-    // ─────────────────────────────────────────────────────────────
+    private Coroutine  popupRoutine;
     private ScoreManager scoreManager;
-    private Canvas       canvas;
 
     // ─────────────────────────────────────────────────────────────
     void Awake()
@@ -61,7 +46,7 @@ public class HUDManager : MonoBehaviour
     {
         scoreManager = FindFirstObjectByType<ScoreManager>();
 
-        // Tell StyleBar about the UI elements we built
+        // Wire StyleBar's UI fields — it finds refs by having them injected here
         StyleBar bar = FindFirstObjectByType<StyleBar>();
         if (bar != null)
         {
@@ -71,7 +56,6 @@ public class HUDManager : MonoBehaviour
             bar.rankBackgroundImg = rankBackgroundImg;
         }
 
-        // Initial values
         UpdateHealth(1f);
         UpdateScore(0);
         UpdateKillCount(0);
@@ -80,59 +64,55 @@ public class HUDManager : MonoBehaviour
 
     void Update()
     {
-        if (timerText && scoreManager)
-        {
-            float t = scoreManager.TimeLeft;
-            timerText.text  = string.Format("{0:0}:{1:00}",
-                Mathf.FloorToInt(t / 60f), Mathf.FloorToInt(t % 60f));
-            timerText.color = t < 10f
-                ? Color.Lerp(Color.white, Color.red, Mathf.PingPong(Time.time * 4f, 1f))
-                : Color.white;
-        }
+        if (timerText == null || scoreManager == null) return;
+        float t = scoreManager.TimeLeft;
+        timerText.text  = string.Format("{0:0}:{1:00}", Mathf.FloorToInt(t / 60f), Mathf.FloorToInt(t % 60f));
+        timerText.color = t < 10f
+            ? Color.Lerp(Color.white, Color.red, Mathf.PingPong(Time.time * 4f, 1f))
+            : Color.white;
     }
 
-    // ─── Public API (called by other scripts) ─────────────────────
+    // ─── Public API ───────────────────────────────────────────────
 
     public void UpdateHealth(float pct)
     {
-        if (healthSlider) healthSlider.value = pct;
-        if (healthText)   healthText.text    = Mathf.RoundToInt(pct * 100f) + " HP";
-        if (healthSlider)
+        if (healthSlider != null) healthSlider.value = pct;
+        if (healthText   != null) healthText.text    = Mathf.RoundToInt(pct * 100f) + " HP";
+        if (healthSlider != null)
         {
-            var fill = healthSlider.fillRect?.GetComponent<Image>();
-            if (fill) fill.color = Color.Lerp(Color.red, new Color(0.1f, 0.85f, 0.1f), pct);
+            Image fill = healthSlider.fillRect != null ? healthSlider.fillRect.GetComponent<Image>() : null;
+            if (fill != null) fill.color = Color.Lerp(Color.red, new Color(0.1f, 0.85f, 0.1f), pct);
         }
     }
 
     public void UpdateScore(int score)
     {
-        if (scoreText) scoreText.text = score.ToString("N0");
+        if (scoreText != null) scoreText.text = score.ToString("N0");
     }
 
     public void UpdateKillCount(int kills)
     {
-        if (killCountText) killCountText.text = "☠ " + kills;
+        if (killCountText != null) killCountText.text = "Kills: " + kills;
     }
 
     public void UpdateGrenades(int current, int max)
     {
-        if (grenadeText) grenadeText.text = "💣 " + current + " / " + max;
+        if (grenadeText != null) grenadeText.text = "Grenades: " + current + " / " + max;
     }
 
     public void ShowPopupScore(int points)
     {
-        if (!popupText) return;
+        if (popupTMP == null) return;
         if (popupRoutine != null) StopCoroutine(popupRoutine);
         popupRoutine = StartCoroutine(AnimatePopup("+" + points));
     }
 
-    /// <summary>Called by PlayerHealth when the vignette alpha changes.</summary>
-    public Image HitVignetteImage => hitVignette;
+    public Image HitVignetteImage => hitVignetteImg;
 
     public void ShowDeathScreen()
     {
-        if (deathScreen) deathScreen.SetActive(true);
-        if (deathScoreText && scoreManager)
+        if (deathScreen != null) deathScreen.SetActive(true);
+        if (deathScoreText != null && scoreManager != null)
             deathScoreText.text = "Score: " + scoreManager.Score.ToString("N0");
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible   = true;
@@ -141,9 +121,9 @@ public class HUDManager : MonoBehaviour
 
     public void ShowRoundEnd(int finalScore, int kills)
     {
-        if (roundEndScreen)  roundEndScreen.SetActive(true);
-        if (finalScoreText)  finalScoreText.text = "Score: " + finalScore.ToString("N0");
-        if (finalKillsText)  finalKillsText.text = "Kills: " + kills;
+        if (roundEndScreen != null) roundEndScreen.SetActive(true);
+        if (finalScoreText != null) finalScoreText.text = "Score: " + finalScore.ToString("N0");
+        if (finalKillsText != null) finalKillsText.text = "Kills: " + kills;
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible   = true;
     }
@@ -158,169 +138,137 @@ public class HUDManager : MonoBehaviour
 
     void BuildHUD()
     {
-        // ── Canvas ──────────────────────────────────────────────
-        GameObject cvGO = new GameObject("HUD_Canvas");
-        canvas = cvGO.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        // Canvas
+        GameObject cvGO  = new GameObject("HUD_Canvas");
+        Canvas canvas    = cvGO.AddComponent<Canvas>();
+        canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 10;
-        cvGO.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        ((CanvasScaler)cvGO.GetComponent<CanvasScaler>()).referenceResolution = new Vector2(1920, 1080);
+        CanvasScaler scaler = cvGO.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
         cvGO.AddComponent<GraphicRaycaster>();
-        DontDestroyOnLoad(cvGO);
 
-        // ── Hit vignette (full-screen) ───────────────────────────
-        hitVignette = MakeImage(cvGO, "HitVignette",
-            new Color(0.8f, 0f, 0f, 0f),
-            new Vector2(0, 0), new Vector2(1, 1),
-            Vector2.zero, Vector2.zero);
+        // ── Hit vignette (full screen red flash) ─────────────────
+        hitVignetteImg = NewImage(cvGO, "HitVignette", new Color(0.8f, 0f, 0f, 0f));
+        Stretch(hitVignetteImg.rectTransform);
 
-        // ── Top bar ─────────────────────────────────────────────
-        GameObject topBar = MakePanel(cvGO, "TopBar",
-            new Vector2(0, 1), new Vector2(1, 1),
-            new Vector2(0, -50), new Vector2(0, 0),
-            new Color(0, 0, 0, 0));
+        // ── Top bar ───────────────────────────────────────────────
+        GameObject topBar = NewPanel(cvGO, "TopBar", new Color(0, 0, 0, 0));
+        RectTransform topRt = topBar.GetComponent<RectTransform>();
+        topRt.anchorMin = new Vector2(0, 1); topRt.anchorMax = new Vector2(1, 1);
+        topRt.sizeDelta = new Vector2(0, 60); topRt.anchoredPosition = new Vector2(0, -30);
 
-        killCountText = MakeLabel(topBar, "KillCount", "☠ 0",
-            28, TextAlignmentOptions.Left,
-            new Vector2(0, 0), new Vector2(0.33f, 1f), Vector2.zero, Vector2.zero);
+        killCountText = NewLabel(topBar, "KillCount", "Kills: 0", 26, TextAlignmentOptions.Left);
+        PlaceInParent(killCountText.rectTransform, new Vector2(0,0), new Vector2(0.33f,1), Vector2.zero, Vector2.zero);
 
-        timerText = MakeLabel(topBar, "Timer", "2:00",
-            38, TextAlignmentOptions.Center,
-            new Vector2(0.33f, 0), new Vector2(0.66f, 1f), Vector2.zero, Vector2.zero);
+        timerText = NewLabel(topBar, "Timer", "2:00", 38, TextAlignmentOptions.Center);
         timerText.fontStyle = FontStyles.Bold;
+        PlaceInParent(timerText.rectTransform, new Vector2(0.33f,0), new Vector2(0.66f,1), Vector2.zero, Vector2.zero);
 
-        scoreText = MakeLabel(topBar, "Score", "0",
-            28, TextAlignmentOptions.Right,
-            new Vector2(0.66f, 0), new Vector2(1f, 1f), Vector2.zero, Vector2.zero);
+        scoreText = NewLabel(topBar, "Score", "0", 26, TextAlignmentOptions.Right);
+        PlaceInParent(scoreText.rectTransform, new Vector2(0.66f,0), new Vector2(1f,1), Vector2.zero, Vector2.zero);
 
-        // ── Bottom-left: health ──────────────────────────────────
-        GameObject healthPanel = MakePanel(cvGO, "HealthPanel",
-            new Vector2(0, 0), new Vector2(0, 0),
-            new Vector2(20, 20), new Vector2(320, 80),
-            new Color(0, 0, 0, 0.45f));
+        // ── Bottom-left: health ───────────────────────────────────
+        GameObject hpPanel = NewPanel(cvGO, "HealthPanel", new Color(0,0,0,0.45f));
+        RectTransform hpRt = hpPanel.GetComponent<RectTransform>();
+        hpRt.anchorMin = new Vector2(0,0); hpRt.anchorMax = new Vector2(0,0);
+        hpRt.pivot     = new Vector2(0,0);
+        hpRt.anchoredPosition = new Vector2(20, 20);
+        hpRt.sizeDelta = new Vector2(300, 70);
 
-        healthText = MakeLabel(healthPanel, "HPText", "100 HP",
-            18, TextAlignmentOptions.Left,
-            new Vector2(0, 0.5f), new Vector2(0, 0.5f),
-            new Vector2(10, 0), new Vector2(120, 30));
+        healthText = NewLabel(hpPanel, "HPText", "100 HP", 18, TextAlignmentOptions.Left);
+        PlaceInParent(healthText.rectTransform, new Vector2(0,0.5f), new Vector2(1f,1f), new Vector2(8,0), new Vector2(-8,0));
 
-        healthSlider = MakeSlider(healthPanel, "HealthBar",
-            new Color(0.1f, 0.85f, 0.1f),
-            new Vector2(0, 0), new Vector2(1, 0),
-            new Vector2(10, 10), new Vector2(-10, 30));
+        healthSlider = NewSlider(hpPanel, "HealthBar", new Color(0.1f, 0.85f, 0.1f));
+        PlaceInParent(healthSlider.GetComponent<RectTransform>(), new Vector2(0,0), new Vector2(1,0.5f), new Vector2(8,6), new Vector2(-8,0));
 
-        // ── Bottom-right: grenades ───────────────────────────────
-        GameObject grenPanel = MakePanel(cvGO, "GrenadePanel",
-            new Vector2(1, 0), new Vector2(1, 0),
-            new Vector2(-220, 20), new Vector2(200, 50),
-            new Color(0, 0, 0, 0.45f));
+        // ── Bottom-right: grenades ────────────────────────────────
+        GameObject grenPanel = NewPanel(cvGO, "GrenPanel", new Color(0,0,0,0.45f));
+        RectTransform grenRt = grenPanel.GetComponent<RectTransform>();
+        grenRt.anchorMin = new Vector2(1,0); grenRt.anchorMax = new Vector2(1,0);
+        grenRt.pivot = new Vector2(1,0);
+        grenRt.anchoredPosition = new Vector2(-20, 20);
+        grenRt.sizeDelta = new Vector2(230, 50);
+        grenadeText = NewLabel(grenPanel, "GrenText", "Grenades: 3 / 3", 22, TextAlignmentOptions.Center);
+        Stretch(grenadeText.rectTransform);
 
-        grenadeText = MakeLabel(grenPanel, "GrenadeText", "💣 3 / 3",
-            22, TextAlignmentOptions.Center,
-            new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
+        // ── Left-centre: style panel ──────────────────────────────
+        GameObject stylePanel = NewPanel(cvGO, "StylePanel", new Color(0,0,0,0));
+        RectTransform styleRt = stylePanel.GetComponent<RectTransform>();
+        styleRt.anchorMin = new Vector2(0,0.5f); styleRt.anchorMax = new Vector2(0,0.5f);
+        styleRt.pivot = new Vector2(0, 0.5f);
+        styleRt.anchoredPosition = new Vector2(10, 0);
+        styleRt.sizeDelta = new Vector2(160, 170);
 
-        // ── Left-centre: style panel ─────────────────────────────
-        GameObject stylePanel = MakePanel(cvGO, "StylePanel",
-            new Vector2(0, 0.5f), new Vector2(0, 0.5f),
-            new Vector2(10, -90), new Vector2(170, 180),
-            new Color(0, 0, 0, 0.0f));
+        rankBackgroundImg = NewImage(stylePanel, "RankBG", new Color(1,1,1,0.08f));
+        Stretch(rankBackgroundImg.rectTransform);
 
-        rankBackgroundImg = MakeImage(stylePanel, "RankBG",
-            new Color(1, 1, 1, 0.1f),
-            new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
-
-        rankLabel = MakeLabel(stylePanel, "RankLetter", "D",
-            72, TextAlignmentOptions.Center,
-            new Vector2(0, 0.4f), new Vector2(1, 1f), Vector2.zero, Vector2.zero);
+        rankLabel = NewLabel(stylePanel, "RankLetter", "D", 72, TextAlignmentOptions.Center);
         rankLabel.fontStyle = FontStyles.Bold;
-        rankLabel.color     = new Color(0.55f, 0.55f, 0.55f);
+        rankLabel.color = new Color(0.55f, 0.55f, 0.55f);
+        PlaceInParent(rankLabel.rectTransform, new Vector2(0, 0.45f), new Vector2(1, 1f), Vector2.zero, Vector2.zero);
 
-        styleWordLabel = MakeLabel(stylePanel, "StyleWord", "DULL",
-            16, TextAlignmentOptions.Center,
-            new Vector2(0, 0.25f), new Vector2(1, 0.45f), Vector2.zero, Vector2.zero);
-        styleWordLabel.color = Color.white;
+        styleWordLabel = NewLabel(stylePanel, "StyleWord", "DULL", 14, TextAlignmentOptions.Center);
+        PlaceInParent(styleWordLabel.rectTransform, new Vector2(0, 0.28f), new Vector2(1, 0.48f), Vector2.zero, Vector2.zero);
 
-        styleFillBar = MakeSlider(stylePanel, "StyleBar",
-            new Color(0.55f, 0.55f, 0.55f),
-            new Vector2(0, 0), new Vector2(1, 0),
-            new Vector2(5, 8), new Vector2(-5, 22));
+        styleFillBar = NewSlider(stylePanel, "StyleFill", new Color(0.55f, 0.55f, 0.55f));
+        PlaceInParent(styleFillBar.GetComponent<RectTransform>(), new Vector2(0,0), new Vector2(1,0), new Vector2(6,8), new Vector2(-6,22));
 
-        // ── Floating score popup ─────────────────────────────────
+        // ── Floating score popup ──────────────────────────────────
         GameObject popupGO = new GameObject("PopupScore");
         popupGO.transform.SetParent(cvGO.transform, false);
-        popupText = popupGO.AddComponent<TMP_Text>() is TMP_Text t ? t : null;
-        // TMP needs the proper component; use AddComponent<TextMeshProUGUI>
-        Destroy(popupGO);   // rebuild with correct component
-        popupGO = new GameObject("PopupScore");
-        popupGO.transform.SetParent(cvGO.transform, false);
-        var popupTMP = popupGO.AddComponent<TextMeshProUGUI>();
-        popupTMP.fontSize    = 36;
-        popupTMP.fontStyle   = FontStyles.Bold;
-        popupTMP.color       = Color.yellow;
-        popupTMP.alignment   = TextAlignmentOptions.Center;
-        popupTMP.text        = "";
-        var popupRect        = popupGO.GetComponent<RectTransform>();
-        popupRect.anchorMin  = new Vector2(0.5f, 0.4f);
-        popupRect.anchorMax  = new Vector2(0.5f, 0.4f);
-        popupRect.sizeDelta  = new Vector2(200, 60);
+        popupTMP = popupGO.AddComponent<TextMeshProUGUI>();
+        popupTMP.fontSize  = 36;
+        popupTMP.fontStyle = FontStyles.Bold;
+        popupTMP.color     = Color.yellow;
+        popupTMP.alignment = TextAlignmentOptions.Center;
+        popupTMP.text      = "";
+        popupRect = popupGO.GetComponent<RectTransform>();
+        popupRect.anchorMin = new Vector2(0.5f, 0.45f);
+        popupRect.anchorMax = new Vector2(0.5f, 0.45f);
+        popupRect.sizeDelta = new Vector2(200, 60);
         popupRect.anchoredPosition = Vector2.zero;
-        popupText   = popupTMP;
-        popupAnchor = popupRect;
-        var cg = popupGO.AddComponent<CanvasGroup>();
-        cg.alpha = 0f;
+        CanvasGroup popupCG = popupGO.AddComponent<CanvasGroup>();
+        popupCG.alpha = 0f;
 
-        // ── Death screen ─────────────────────────────────────────
-        deathScreen = MakeDarkOverlay(cvGO, "DeathScreen",
-            new Color(0, 0, 0, 0.82f));
-        MakeLabel(deathScreen, "DeathTitle", "YOU DIED",
-            80, TextAlignmentOptions.Center,
-            new Vector2(0, 0.55f), new Vector2(1, 0.75f), Vector2.zero, Vector2.zero)
-            .color = Color.red;
-        deathScoreText = MakeLabel(deathScreen, "DeathScore", "Score: 0",
-            36, TextAlignmentOptions.Center,
-            new Vector2(0, 0.35f), new Vector2(1, 0.55f), Vector2.zero, Vector2.zero);
-        MakeLabel(deathScreen, "DeathHint", "Restarting…",
-            22, TextAlignmentOptions.Center,
-            new Vector2(0, 0.2f), new Vector2(1, 0.35f), Vector2.zero, Vector2.zero)
-            .color = new Color(1, 1, 1, 0.5f);
+        // ── Death screen ──────────────────────────────────────────
+        deathScreen = NewOverlay(cvGO, "DeathScreen", new Color(0,0,0,0.82f));
+        TextMeshProUGUI dTitle = NewLabel(deathScreen, "DeathTitle", "YOU DIED", 80, TextAlignmentOptions.Center);
+        dTitle.color = Color.red;
+        PlaceInParent(dTitle.rectTransform, new Vector2(0,0.55f), new Vector2(1,0.78f), Vector2.zero, Vector2.zero);
+        deathScoreText = NewLabel(deathScreen, "DeathScore", "Score: 0", 36, TextAlignmentOptions.Center);
+        PlaceInParent(deathScoreText.rectTransform, new Vector2(0,0.35f), new Vector2(1,0.55f), Vector2.zero, Vector2.zero);
+        TextMeshProUGUI dHint = NewLabel(deathScreen, "DeathHint", "Restarting in 5 seconds…", 22, TextAlignmentOptions.Center);
+        dHint.color = new Color(1,1,1,0.5f);
+        PlaceInParent(dHint.rectTransform, new Vector2(0,0.20f), new Vector2(1,0.35f), Vector2.zero, Vector2.zero);
         deathScreen.SetActive(false);
 
-        // ── Round end screen ─────────────────────────────────────
-        roundEndScreen = MakeDarkOverlay(cvGO, "RoundEndScreen",
-            new Color(0, 0, 0, 0.88f));
-        MakeLabel(roundEndScreen, "EndTitle", "TIME'S UP",
-            72, TextAlignmentOptions.Center,
-            new Vector2(0, 0.60f), new Vector2(1, 0.80f), Vector2.zero, Vector2.zero)
-            .color = Color.yellow;
-        finalScoreText = MakeLabel(roundEndScreen, "FinalScore", "Score: 0",
-            40, TextAlignmentOptions.Center,
-            new Vector2(0, 0.42f), new Vector2(1, 0.60f), Vector2.zero, Vector2.zero);
-        finalKillsText = MakeLabel(roundEndScreen, "FinalKills", "Kills: 0",
-            32, TextAlignmentOptions.Center,
-            new Vector2(0, 0.28f), new Vector2(1, 0.42f), Vector2.zero, Vector2.zero);
-        MakeRestartButton(roundEndScreen, this);
+        // ── Round end screen ──────────────────────────────────────
+        roundEndScreen = NewOverlay(cvGO, "RoundEndScreen", new Color(0,0,0,0.88f));
+        TextMeshProUGUI eTitle = NewLabel(roundEndScreen, "EndTitle", "TIME'S UP", 72, TextAlignmentOptions.Center);
+        eTitle.color = Color.yellow;
+        PlaceInParent(eTitle.rectTransform, new Vector2(0,0.60f), new Vector2(1,0.82f), Vector2.zero, Vector2.zero);
+        finalScoreText = NewLabel(roundEndScreen, "FinalScore", "Score: 0", 40, TextAlignmentOptions.Center);
+        PlaceInParent(finalScoreText.rectTransform, new Vector2(0,0.42f), new Vector2(1,0.60f), Vector2.zero, Vector2.zero);
+        finalKillsText = NewLabel(roundEndScreen, "FinalKills", "Kills: 0", 32, TextAlignmentOptions.Center);
+        PlaceInParent(finalKillsText.rectTransform, new Vector2(0,0.28f), new Vector2(1,0.42f), Vector2.zero, Vector2.zero);
+        NewRestartButton(roundEndScreen);
         roundEndScreen.SetActive(false);
     }
 
     // ─── Popup animation ──────────────────────────────────────────
-
     IEnumerator AnimatePopup(string msg)
     {
-        if (popupText == null || popupAnchor == null) yield break;
-        var cg = popupText.GetComponent<CanvasGroup>();
-        if (cg == null) cg = popupText.gameObject.AddComponent<CanvasGroup>();
-
-        popupText.text      = msg;
-        Vector2 startPos    = Vector2.zero;
-        popupAnchor.anchoredPosition = startPos;
+        CanvasGroup cg = popupTMP.GetComponent<CanvasGroup>();
+        popupTMP.text = msg;
+        popupRect.anchoredPosition = Vector2.zero;
         cg.alpha = 1f;
-
         float dur = 1.2f, elapsed = 0f;
         while (elapsed < dur)
         {
             elapsed += Time.deltaTime;
             float t  = elapsed / dur;
-            popupAnchor.anchoredPosition = startPos + Vector2.up * (90f * t);
+            popupRect.anchoredPosition = Vector2.up * (90f * t);
             cg.alpha = Mathf.Lerp(1f, 0f, t * t);
             yield return null;
         }
@@ -336,139 +284,114 @@ public class HUDManager : MonoBehaviour
 
     // ─── UI factory helpers ───────────────────────────────────────
 
-    // anchorMin/Max are 0-1 fractions of parent; offsetMin/Max are pixel offsets.
-    Image MakeImage(GameObject parent, string name, Color color,
-        Vector2 anchorMin, Vector2 anchorMax,
-        Vector2 offsetMin, Vector2 offsetMax)
+    Image NewImage(GameObject parent, string name, Color color)
     {
-        var go  = new GameObject(name);
+        GameObject go = new GameObject(name);
         go.transform.SetParent(parent.transform, false);
-        var img = go.AddComponent<Image>();
+        Image img = go.AddComponent<Image>();
         img.color = color;
-        var rt  = go.GetComponent<RectTransform>();
-        rt.anchorMin  = anchorMin;
-        rt.anchorMax  = anchorMax;
-        rt.offsetMin  = offsetMin;
-        rt.offsetMax  = offsetMax;
         return img;
     }
 
-    GameObject MakePanel(GameObject parent, string name,
-        Vector2 anchorMin, Vector2 anchorMax,
-        Vector2 offsetMin, Vector2 offsetMax,
-        Color bg)
+    GameObject NewPanel(GameObject parent, string name, Color bg)
     {
-        var go  = new GameObject(name);
+        GameObject go = new GameObject(name);
         go.transform.SetParent(parent.transform, false);
-        var img = go.AddComponent<Image>();
+        Image img = go.AddComponent<Image>();
         img.color = bg;
-        var rt  = go.GetComponent<RectTransform>();
-        rt.anchorMin  = anchorMin;
-        rt.anchorMax  = anchorMax;
-        rt.offsetMin  = offsetMin;
-        rt.offsetMax  = offsetMax;
         return go;
     }
 
-    TextMeshProUGUI MakeLabel(GameObject parent, string name, string text,
-        float fontSize, TextAlignmentOptions align,
-        Vector2 anchorMin, Vector2 anchorMax,
-        Vector2 offsetMin, Vector2 offsetMax)
+    TextMeshProUGUI NewLabel(GameObject parent, string name, string text, float size, TextAlignmentOptions align)
     {
-        var go  = new GameObject(name);
+        GameObject go = new GameObject(name);
         go.transform.SetParent(parent.transform, false);
-        var tmp = go.AddComponent<TextMeshProUGUI>();
+        TextMeshProUGUI tmp = go.AddComponent<TextMeshProUGUI>();
         tmp.text      = text;
-        tmp.fontSize  = fontSize;
+        tmp.fontSize  = size;
         tmp.alignment = align;
         tmp.color     = Color.white;
-        var rt = go.GetComponent<RectTransform>();
-        rt.anchorMin  = anchorMin;
-        rt.anchorMax  = anchorMax;
-        rt.offsetMin  = offsetMin;
-        rt.offsetMax  = offsetMax;
         return tmp;
     }
 
-    Slider MakeSlider(GameObject parent, string name, Color fillColor,
-        Vector2 anchorMin, Vector2 anchorMax,
-        Vector2 offsetMin, Vector2 offsetMax)
+    Slider NewSlider(GameObject parent, string name, Color fillColor)
     {
-        // Background
-        var bg    = new GameObject(name + "_BG");
+        // Track background
+        GameObject bg = new GameObject(name + "_Track");
         bg.transform.SetParent(parent.transform, false);
-        var bgImg = bg.AddComponent<Image>();
+        Image bgImg = bg.AddComponent<Image>();
         bgImg.color = new Color(0.15f, 0.15f, 0.15f, 0.8f);
-        var bgRt  = bg.GetComponent<RectTransform>();
-        bgRt.anchorMin = anchorMin;
-        bgRt.anchorMax = anchorMax;
-        bgRt.offsetMin = offsetMin;
-        bgRt.offsetMax = offsetMax;
 
         // Fill area
-        var fillArea = new GameObject("Fill Area");
+        GameObject fillArea = new GameObject("Fill Area");
         fillArea.transform.SetParent(bg.transform, false);
-        var faRt     = fillArea.AddComponent<RectTransform>();
-        faRt.anchorMin = Vector2.zero;
-        faRt.anchorMax = Vector2.one;
-        faRt.offsetMin = new Vector2(0, 0);
-        faRt.offsetMax = new Vector2(0, 0);
+        RectTransform faRt = fillArea.AddComponent<RectTransform>();
+        faRt.anchorMin = Vector2.zero; faRt.anchorMax = Vector2.one;
+        faRt.offsetMin = Vector2.zero; faRt.offsetMax = Vector2.zero;
 
-        var fill    = new GameObject("Fill");
+        // Fill
+        GameObject fill = new GameObject("Fill");
         fill.transform.SetParent(fillArea.transform, false);
-        var fillImg = fill.AddComponent<Image>();
+        Image fillImg = fill.AddComponent<Image>();
         fillImg.color = fillColor;
-        var fillRt  = fill.GetComponent<RectTransform>();
-        fillRt.anchorMin = Vector2.zero;
-        fillRt.anchorMax = Vector2.one;
-        fillRt.offsetMin = Vector2.zero;
-        fillRt.offsetMax = Vector2.zero;
+        RectTransform fillRt = fill.GetComponent<RectTransform>();
+        fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = Vector2.one;
+        fillRt.offsetMin = Vector2.zero; fillRt.offsetMax = Vector2.zero;
 
-        var slider         = bg.AddComponent<Slider>();
-        slider.fillRect    = fillRt;
-        slider.direction   = Slider.Direction.LeftToRight;
-        slider.minValue    = 0f;
-        slider.maxValue    = 1f;
-        slider.value       = 1f;
-        slider.interactable = false;
-
-        return slider;
+        Slider s = bg.AddComponent<Slider>();
+        s.fillRect    = fillRt;
+        s.direction   = Slider.Direction.LeftToRight;
+        s.minValue    = 0f;
+        s.maxValue    = 1f;
+        s.value       = 1f;
+        s.interactable = false;
+        return s;
     }
 
-    GameObject MakeDarkOverlay(GameObject parent, string name, Color bg)
+    GameObject NewOverlay(GameObject parent, string name, Color bg)
     {
-        var go  = new GameObject(name);
+        GameObject go = new GameObject(name);
         go.transform.SetParent(parent.transform, false);
-        var img = go.AddComponent<Image>();
+        Image img = go.AddComponent<Image>();
         img.color = bg;
-        var rt  = go.GetComponent<RectTransform>();
+        RectTransform rt = go.GetComponent<RectTransform>();
+        Stretch(rt);
+        return go;
+    }
+
+    void NewRestartButton(GameObject parent)
+    {
+        GameObject go = new GameObject("RestartButton");
+        go.transform.SetParent(parent.transform, false);
+        Image img = go.AddComponent<Image>();
+        img.color = new Color(0.9f, 0.7f, 0.1f);
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.35f, 0.10f);
+        rt.anchorMax = new Vector2(0.65f, 0.23f);
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+        Button btn = go.AddComponent<Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(RestartScene);
+        TextMeshProUGUI lbl = NewLabel(go, "Label", "PLAY AGAIN", 26, TextAlignmentOptions.Center);
+        lbl.color = Color.black;
+        lbl.fontStyle = FontStyles.Bold;
+        Stretch(lbl.rectTransform);
+    }
+
+    void Stretch(RectTransform rt)
+    {
         rt.anchorMin = Vector2.zero;
         rt.anchorMax = Vector2.one;
         rt.offsetMin = Vector2.zero;
         rt.offsetMax = Vector2.zero;
-        return go;
     }
 
-    void MakeRestartButton(GameObject parent, HUDManager mgr)
+    void PlaceInParent(RectTransform rt, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
     {
-        var go  = new GameObject("RestartButton");
-        go.transform.SetParent(parent.transform, false);
-        var img = go.AddComponent<Image>();
-        img.color = new Color(0.9f, 0.7f, 0.1f);
-        var rt  = go.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.35f, 0.10f);
-        rt.anchorMax = new Vector2(0.65f, 0.22f);
-        rt.offsetMin = Vector2.zero;
-        rt.offsetMax = Vector2.zero;
-
-        var btn = go.AddComponent<Button>();
-        btn.targetGraphic = img;
-        btn.onClick.AddListener(mgr.RestartScene);
-
-        var lbl = MakeLabel(go, "BtnLabel", "PLAY AGAIN",
-            26, TextAlignmentOptions.Center,
-            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        lbl.color = Color.black;
-        lbl.fontStyle = FontStyles.Bold;
+        rt.anchorMin = anchorMin;
+        rt.anchorMax = anchorMax;
+        rt.offsetMin = offsetMin;
+        rt.offsetMax = offsetMax;
     }
 }
