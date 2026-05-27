@@ -58,6 +58,20 @@ public class ScoreManager : MonoBehaviour
     void EndRound()
     {
         roundActive = false;
+
+        // Freeze game and disable player
+        Time.timeScale = 0f;
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player)
+        {
+            PlayerMovementScript pms = player.GetComponent<PlayerMovementScript>();
+            if (pms) pms.enabled = false;
+            GunInventory gi = player.GetComponent<GunInventory>();
+            if (gi) gi.DeadMethod();
+            MouseLookScript ml = player.GetComponent<MouseLookScript>();
+            if (ml) ml.enabled = false;
+        }
+
         if (hud) hud.ShowRoundEnd(totalScore, killCount);
     }
 

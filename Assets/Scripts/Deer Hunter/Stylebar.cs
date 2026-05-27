@@ -34,6 +34,7 @@ public class StyleBar : MonoBehaviour
     public Slider     styleFillBar;      // Fills between current rank thresholds
     public TMP_Text   styleWordLabel;    // "STYLISH", "SMOKING SEXY STYLE", etc.
     public Image      rankBackgroundImg; // Tinted per rank
+    public Image      styleFillImage;    // Fill image of the slider bar — tinted per rank
 
     [Header("Tuning")]
     public float drainRate        = 40f;   // points drained per second when idle
@@ -131,6 +132,9 @@ public class StyleBar : MonoBehaviour
             c.a = 0.18f;
             rankBackgroundImg.color = c;
         }
+
+        if (styleFillImage)
+            styleFillImage.color = RankColors[currentRank];
 
         if (styleFillBar)
         {

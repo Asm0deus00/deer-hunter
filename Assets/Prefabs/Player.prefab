@@ -482,7 +482,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c5565023750e7e439bdddb54cdd116a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GrenadeThrow
-  grenadePrefab: {fileID: 0}
+  grenadePrefab: {fileID: 6703325270622225972, guid: 7f972fdb27760214889f6a2736af1894, type: 3}
   maxGrenades: 3
   throwForce: 18
   throwUpAngle: 15

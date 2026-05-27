@@ -26,6 +26,7 @@ public class HUDManager : MonoBehaviour
     [HideInInspector] public TextMeshProUGUI styleWordLabel;
     [HideInInspector] public Slider          styleFillBar;
     [HideInInspector] public Image           rankBackgroundImg;
+    [HideInInspector] public Image           styleFillImage;  // fill image of the style slider
 
     private GameObject      deathScreen;
     private TextMeshProUGUI deathScoreText;
@@ -54,7 +55,13 @@ public class HUDManager : MonoBehaviour
             bar.styleWordLabel   = styleWordLabel;
             bar.styleFillBar     = styleFillBar;
             bar.rankBackgroundImg = rankBackgroundImg;
+            bar.styleFillImage    = styleFillImage;
         }
+
+        // Wire the vignette image to PlayerHealth so hit flashes work
+        PlayerHealth ph = FindFirstObjectByType<PlayerHealth>();
+        if (ph != null && ph.hitVignetteImage == null)
+            ph.hitVignetteImage = hitVignetteImg;
 
         UpdateHealth(1f);
         UpdateScore(0);
@@ -150,6 +157,7 @@ public class HUDManager : MonoBehaviour
 
         // ── Hit vignette (full screen red flash) ─────────────────
         hitVignetteImg = NewImage(cvGO, "HitVignette", new Color(0.8f, 0f, 0f, 0f));
+        hitVignetteImg.raycastTarget = false; // don't block clicks
         Stretch(hitVignetteImg.rectTransform);
 
         // ── Top bar ───────────────────────────────────────────────
@@ -212,6 +220,9 @@ public class HUDManager : MonoBehaviour
         PlaceInParent(styleWordLabel.rectTransform, new Vector2(0, 0.28f), new Vector2(1, 0.48f), Vector2.zero, Vector2.zero);
 
         styleFillBar = NewSlider(stylePanel, "StyleFill", new Color(0.55f, 0.55f, 0.55f));
+        // Grab the fill Image so StyleBar can recolor it per rank
+        if (styleFillBar.fillRect != null)
+            styleFillImage = styleFillBar.fillRect.GetComponent<Image>();
         PlaceInParent(styleFillBar.GetComponent<RectTransform>(), new Vector2(0,0), new Vector2(1,0), new Vector2(6,8), new Vector2(-6,22));
 
         // ── Floating score popup ──────────────────────────────────

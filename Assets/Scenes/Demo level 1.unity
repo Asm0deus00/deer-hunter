@@ -1187,19 +1187,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DeerSpawner
   deerPrefab: {fileID: 3126396379945887403, guid: efeef5c00911b0e43a6e69d35722f554, type: 3}
-  spawnPoints:
-  - {fileID: 0}
-  autoSpawnCenter: {fileID: 212660768}
-  autoSpawnRadius: 25
-  minDistToPlayer: 10
-  baseSpawnInterval: 6
-  minSpawnInterval: 2
-  baseMaxAlive: 4
-  maxMaxAlive: 14
-  basePackSize: 1
-  maxPackSize: 4
-  gunnerStartChance: 0.15
-  gunnerMaxChance: 0.6
+  spawnRadius: 20
+  minDistPlayer: 8
+  spawnInterval: 3
+  maxAlive: 8
   roundDuration: 120
 --- !u!1 &1297909384
 GameObject:

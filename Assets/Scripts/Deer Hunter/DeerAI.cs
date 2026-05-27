@@ -21,7 +21,7 @@ public class DeerAI : MonoBehaviour
     [Header("Stats")]
     public float maxHealth        = 100f;
     public float moveSpeed        = 4f;
-    public float chaseRange       = 20f;
+    public float chaseRange       = 50f;
     public float attackRange      = 2.5f;
     public int   scoreValue       = 100;       // base score for killing this deer
     public int   stylePoints      = 10;        // style-bar contribution per hit received
@@ -74,7 +74,7 @@ public class DeerAI : MonoBehaviour
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ | RigidbodyConstraints.FreezePositionY;
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
         currentHealth = maxHealth;
 
@@ -128,18 +128,26 @@ public class DeerAI : MonoBehaviour
 
     void IdleBehavior()
     {
-        rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, 0);
+        // Nothing — transform-based movement means no velocity to clear
     }
 
     void ChaseBehavior()
     {
         if (!player) return;
-        Vector3 dir = (player.position - transform.position).normalized;
+        Vector3 dir = (player.position - transform.position);
         dir.y = 0;
-        rb.linearVelocity = new Vector3(dir.x * moveSpeed, rb.linearVelocity.y, dir.z * moveSpeed);
-        // Face player — only rotate on Y, preserving the X=-90 tilt of the prefab
-        transform.rotation = Quaternion.Slerp(transform.rotation,
-            YLook(dir), Time.deltaTime * 8f);
+        if (dir.sqrMagnitude < 0.001f) return;
+        dir.Normalize();
+
+        // Move via Transform directly — avoids Rigidbody constraint issues entirely
+        Vector3 move = dir * moveSpeed * Time.deltaTime;
+        transform.position += move;
+
+        // Face player — only rotate on Y
+        float targetY = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+        Vector3 eu = transform.eulerAngles;
+        eu.y = Mathf.LerpAngle(eu.y, targetY, Time.deltaTime * 8f);
+        transform.eulerAngles = eu;
     }
 
     void AttackBehavior()
@@ -158,8 +166,12 @@ public class DeerAI : MonoBehaviour
             Vector3 dir = (player.position - transform.position).normalized;
             dir.y = 0;
             if (dir != Vector3.zero)
-                transform.rotation = Quaternion.Slerp(transform.rotation,
-                    YLook(dir), Time.deltaTime * 6f);
+            {
+                float targetY2 = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+                Vector3 eu2 = transform.eulerAngles;
+                eu2.y = Mathf.LerpAngle(eu2.y, targetY2, Time.deltaTime * 6f);
+                transform.eulerAngles = eu2;
+            }
 
             if (shootTimer <= 0f)
                 FireGun();
@@ -186,11 +198,13 @@ public class DeerAI : MonoBehaviour
             yield return null;
         }
 
-        // Lunge forward
+        // Lunge forward via transform so constraints don't block it
         if (player)
         {
-            Vector3 dir = (player.position - transform.position).normalized;
-            rb.AddForce(dir * tackleForce, ForceMode.Impulse);
+            Vector3 dir = (player.position - transform.position);
+            dir.y = 0;
+            dir.Normalize();
+            StartCoroutine(LungeMove(dir));
         }
 
         // Reset model rotation
@@ -350,6 +364,19 @@ public class DeerAI : MonoBehaviour
         if (dir.sqrMagnitude < 0.001f) return transform.rotation;
         float yAngle = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
         return Quaternion.Euler(transform.eulerAngles.x, yAngle, transform.eulerAngles.z);
+    }
+
+
+    IEnumerator LungeMove(Vector3 dir)
+    {
+        float duration = 0.2f;
+        float elapsed  = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            transform.position += dir * 12f * Time.deltaTime;
+            yield return null;
+        }
     }
 
 }
