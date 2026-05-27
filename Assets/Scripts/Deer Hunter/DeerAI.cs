@@ -1,72 +1,60 @@
 using UnityEngine;
 using System.Collections;
 
-public enum DeerType
-{
-    Normal,   // Tackles the player
-    Gunner    // Shoots at the player
-}
+public enum DeerType { Normal, Gunner }
 
 /// <summary>
-/// Deer AI — toy-like locomotion (whole-model wobble, no skeleton animations).
-/// Handles: chasing, tackle attack, gun attack, health, and death.
+/// Deer AI. Kinematic movement (no NavMesh needed).
+/// Rigidbody is kept for collision detection only (isKinematic = true).
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(CapsuleCollider))]
 public class DeerAI : MonoBehaviour
 {
-    // ─── Inspector ───────────────────────────────────────────────
-    [Header("Deer Type")]
+    [Header("Type")]
     public DeerType deerType = DeerType.Normal;
 
     [Header("Stats")]
-    public float maxHealth        = 100f;
-    public float moveSpeed        = 4f;
-    public float chaseRange       = 50f;
-    public float attackRange      = 2.5f;
-    public int   scoreValue       = 100;       // base score for killing this deer
-    public int   stylePoints      = 10;        // style-bar contribution per hit received
+    public float maxHealth   = 100f;
+    public float moveSpeed   = 5f;
+    public float chaseRange  = 50f;
+    public float attackRange = 2.2f;
+    public int   scoreValue  = 100;
+    public int   stylePoints = 10;
 
-    [Header("Tackle Attack (Normal Deer)")]
-    public float tackleDamage     = 20f;
-    public float tackleCooldown   = 2f;
-    public float tackleForce      = 600f;
+    [Header("Tackle (Normal)")]
+    public float tackleDamage   = 20f;
+    public float tackleCooldown = 2f;
 
-    [Header("Gun Attack (Gunner Deer)")]
+    [Header("Gun (Gunner)")]
     public GameObject deerBulletPrefab;
     public Transform  gunMuzzle;
-    public float      gunDamage       = 10f;
-    public float      gunFireRate     = 1.5f;   // shots per second
-    public float      gunRange        = 18f;
+    public float      gunDamage   = 10f;
+    public float      gunFireRate = 1.2f;
 
     [Header("Toy Locomotion")]
-    public float wobbleSpeed      = 8f;         // body bob Hz
-    public float wobbleAmount     = 0.08f;
-    public float tiltAmount       = 12f;        // side tilt when strafing
-    public float modelBounce      = 0.04f;      // vertical bounce amplitude
+    public float wobbleSpeed  = 8f;
+    public float wobbleAmount = 0.08f;
+    public float tiltAmount   = 12f;
 
-    [Header("Knockback")]
-    public float hitKnockback     = 3f;
+    [Header("FX")]
+    public GameObject deathFX;
+    public GameObject hitFX;
 
-    [Header("FX Prefabs")]
-    public GameObject deathFX;                  // particle burst on death
-    public GameObject hitFX;                    // small spark/flash on hit
+    // ── Runtime ──────────────────────────────────────────────────
+    private float     hp;
+    private bool      isDead      = false;
+    private float     attackTimer = 0f;
+    private float     shootTimer  = 0f;
+    private float     wobblePhase = 0f;
+    private bool      isMoving    = false;
 
-    // ─── Runtime ─────────────────────────────────────────────────
-    private float      currentHealth;
     private Transform  player;
     private Rigidbody  rb;
-    private bool       isDead          = false;
-    private bool       isAttacking     = false;
-    private float      attackTimer     = 0f;
-    private float      shootTimer      = 0f;
-
-    // Toy locomotion
+    private Transform  modelRoot;
     private Vector3    modelStartLocalPos;
     private Quaternion modelStartLocalRot;
-    private Transform  modelRoot;           // child "model" transform to wobble
-    private float      wobblePhase;
 
-    // ─── State ───────────────────────────────────────────────────
     private enum State { Idle, Chase, Attack, Dead }
     private State state = State.Idle;
 
@@ -74,244 +62,162 @@ public class DeerAI : MonoBehaviour
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+        // Kinematic: we move via transform, Rigidbody is only for OnCollisionEnter
+        rb.isKinematic = true;
 
-        currentHealth = maxHealth;
+        hp = maxHealth;
 
-        // Expect a child named "Model" to wobble (the entire visible mesh)
         modelRoot = transform.Find("Model");
-        if (modelRoot == null) modelRoot = transform; // fallback
-
+        if (modelRoot == null) modelRoot = transform;
         modelStartLocalPos = modelRoot.localPosition;
         modelStartLocalRot = modelRoot.localRotation;
     }
 
     void Start()
     {
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj) player = playerObj.transform;
+        var p = GameObject.FindGameObjectWithTag("Player");
+        if (p) player = p.transform;
     }
 
-    // ─────────────────────────────────────────────────────────────
     void Update()
     {
         if (isDead) return;
-
         attackTimer -= Time.deltaTime;
         shootTimer  -= Time.deltaTime;
-
-        UpdateState();
-        ExecuteState();
+        Tick();
         ToyLoco();
     }
 
-    // ── State machine ────────────────────────────────────────────
-    void UpdateState()
+    // ── State machine ─────────────────────────────────────────────
+    void Tick()
     {
-        if (!player) return;
+        if (!player) { state = State.Idle; return; }
+
         float dist = Vector3.Distance(transform.position, player.position);
 
         if      (dist > chaseRange)  state = State.Idle;
         else if (dist > attackRange) state = State.Chase;
         else                         state = State.Attack;
-    }
 
-    void ExecuteState()
-    {
         switch (state)
         {
-            case State.Idle:   IdleBehavior();   break;
-            case State.Chase:  ChaseBehavior();  break;
-            case State.Attack: AttackBehavior(); break;
+            case State.Idle:
+                isMoving = false;
+                break;
+
+            case State.Chase:
+                isMoving = true;
+                Vector3 dir = player.position - transform.position;
+                dir.y = 0f;
+                dir.Normalize();
+                // Move
+                transform.position += dir * moveSpeed * Time.deltaTime;
+                // Turn — only Y axis
+                float targetY = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+                Vector3 eu = transform.eulerAngles;
+                eu.y = Mathf.LerpAngle(eu.y, targetY, Time.deltaTime * 10f);
+                transform.eulerAngles = eu;
+                break;
+
+            case State.Attack:
+                isMoving = false;
+                // Always face player while attacking
+                Vector3 adir = player.position - transform.position;
+                adir.y = 0f;
+                if (adir.sqrMagnitude > 0.001f)
+                {
+                    float ay = Mathf.Atan2(adir.x, adir.z) * Mathf.Rad2Deg;
+                    Vector3 aeu = transform.eulerAngles;
+                    aeu.y = Mathf.LerpAngle(aeu.y, ay, Time.deltaTime * 10f);
+                    transform.eulerAngles = aeu;
+                }
+
+                if (deerType == DeerType.Normal)
+                {
+                    if (attackTimer <= 0f) StartCoroutine(Tackle());
+                }
+                else
+                {
+                    if (shootTimer <= 0f) Shoot();
+                }
+                break;
         }
     }
 
-    void IdleBehavior()
+    // ── Attacks ───────────────────────────────────────────────────
+    IEnumerator Tackle()
     {
-        // Nothing — transform-based movement means no velocity to clear
-    }
+        attackTimer = tackleCooldown;
+        isMoving    = true;
 
-    void ChaseBehavior()
-    {
-        if (!player) return;
         Vector3 dir = (player.position - transform.position);
-        dir.y = 0;
-        if (dir.sqrMagnitude < 0.001f) return;
+        dir.y = 0f;
         dir.Normalize();
 
-        // Move via Transform directly — avoids Rigidbody constraint issues entirely
-        Vector3 move = dir * moveSpeed * Time.deltaTime;
-        transform.position += move;
-
-        // Face player — only rotate on Y
-        float targetY = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
-        Vector3 eu = transform.eulerAngles;
-        eu.y = Mathf.LerpAngle(eu.y, targetY, Time.deltaTime * 8f);
-        transform.eulerAngles = eu;
-    }
-
-    void AttackBehavior()
-    {
-        // Stop moving while attacking
-        rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, 0);
-
-        if (deerType == DeerType.Normal)
-        {
-            if (attackTimer <= 0f)
-                StartCoroutine(TackleAttack());
-        }
-        else // Gunner
-        {
-            // Face player
-            Vector3 dir = (player.position - transform.position).normalized;
-            dir.y = 0;
-            if (dir != Vector3.zero)
-            {
-                float targetY2 = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
-                Vector3 eu2 = transform.eulerAngles;
-                eu2.y = Mathf.LerpAngle(eu2.y, targetY2, Time.deltaTime * 6f);
-                transform.eulerAngles = eu2;
-            }
-
-            if (shootTimer <= 0f)
-                FireGun();
-        }
-    }
-
-    // ── Attacks ──────────────────────────────────────────────────
-    IEnumerator TackleAttack()
-    {
-        isAttacking = true;
-        attackTimer = tackleCooldown;
-
-        // Wind-up: exaggerated tilt backward (toy spring effect)
         float elapsed = 0f;
-        float windupTime = 0.25f;
-        while (elapsed < windupTime)
+        while (elapsed < 0.25f && !isDead)
         {
             elapsed += Time.deltaTime;
-            if (modelRoot != null)
-            {
-                float t = elapsed / windupTime;
-                modelRoot.localRotation = Quaternion.Euler(-30f * t, 0, 0);
-            }
+            transform.position += dir * 14f * Time.deltaTime;
             yield return null;
         }
 
-        // Lunge forward via transform so constraints don't block it
-        if (player)
+        isMoving = false;
+
+        if (player && Vector3.Distance(transform.position, player.position) < attackRange + 1.5f)
         {
-            Vector3 dir = (player.position - transform.position);
-            dir.y = 0;
-            dir.Normalize();
-            StartCoroutine(LungeMove(dir));
+            PlayerHealth ph = player.GetComponent<PlayerHealth>();
+            if (ph) ph.TakeDamage(tackleDamage);
         }
-
-        // Reset model rotation
-        yield return new WaitForSeconds(0.1f);
-        if (modelRoot != null)
-            modelRoot.localRotation = modelStartLocalRot;
-
-        // Deal damage if player still in range
-        if (player)
-        {
-            float dist = Vector3.Distance(transform.position, player.position);
-            if (dist < attackRange + 1f)
-            {
-                PlayerHealth ph = player.GetComponent<PlayerHealth>();
-                if (ph) ph.TakeDamage(tackleDamage);
-            }
-        }
-
-        yield return new WaitForSeconds(0.4f);
-        isAttacking = false;
     }
 
-    void FireGun()
+    void Shoot()
     {
         if (!deerBulletPrefab || !gunMuzzle) return;
         shootTimer = 1f / gunFireRate;
-
-        // Wobble/recoil on model
-        StartCoroutine(GunRecoilAnim());
-
-        Vector3 dir = (player.position + Vector3.up * 1f - gunMuzzle.position).normalized;
-        GameObject proj = Instantiate(deerBulletPrefab, gunMuzzle.position, Quaternion.LookRotation(dir));
-        DeerBullet db = proj.GetComponent<DeerBullet>();
+        Vector3 dir = (player.position + Vector3.up - gunMuzzle.position).normalized;
+        var proj = Instantiate(deerBulletPrefab, gunMuzzle.position, Quaternion.LookRotation(dir));
+        var db   = proj.GetComponent<DeerBullet>();
         if (db) db.damage = gunDamage;
     }
 
-    IEnumerator GunRecoilAnim()
-    {
-        if (modelRoot == null) yield break;
-        modelRoot.localPosition += Vector3.back * 0.15f;
-        yield return new WaitForSeconds(0.06f);
-        modelRoot.localPosition = modelStartLocalPos;
-    }
-
-    // ── Toy Locomotion ───────────────────────────────────────────
+    // ── Toy Locomotion ────────────────────────────────────────────
     void ToyLoco()
     {
-        if (modelRoot == null) return;
-
-        wobblePhase += Time.deltaTime * wobbleSpeed *
-                       (rb.linearVelocity.magnitude > 0.5f ? 1f : 0.2f);
-
-        float speedRatio = Mathf.Clamp01(rb.linearVelocity.magnitude / moveSpeed);
-
-        // Vertical bounce
-        float bounce = Mathf.Sin(wobblePhase * 2f) * modelBounce * speedRatio;
-
-        // Side-to-side rock
-        float rock = Mathf.Sin(wobblePhase) * wobbleAmount * speedRatio;
-
-        // Forward tilt based on speed
-        float forwardTilt = -speedRatio * 15f;
-
-        modelRoot.localPosition = modelStartLocalPos + new Vector3(rock, Mathf.Abs(bounce), 0);
+        if (modelRoot == null || modelRoot == transform) return;
+        float speed = isMoving ? 1f : 0.15f;
+        wobblePhase += Time.deltaTime * wobbleSpeed * speed;
+        float s = Mathf.Sin(wobblePhase);
+        modelRoot.localPosition = modelStartLocalPos + new Vector3(s * wobbleAmount * (isMoving ? 1 : 0), Mathf.Abs(s) * 0.04f * (isMoving ? 1 : 0), 0);
         modelRoot.localRotation = Quaternion.Euler(
-            forwardTilt,
-            0,
-            Mathf.Sin(wobblePhase) * tiltAmount * speedRatio);
+            isMoving ? -10f : 0f,
+            0f,
+            s * tiltAmount * (isMoving ? 1 : 0));
     }
 
-    // ── Damage & Death ───────────────────────────────────────────
-    public void TakeDamage(float amount, Vector3 hitDirection = default)
+    // ── Damage / Death ────────────────────────────────────────────
+    public void TakeDamage(float amount, Vector3 hitDir = default)
     {
         if (isDead) return;
+        hp -= amount;
+        if (hitFX) Instantiate(hitFX, transform.position + Vector3.up, Quaternion.identity);
 
-        currentHealth -= amount;
+        StyleBar sb = FindFirstObjectByType<StyleBar>();
+        if (sb) sb.AddStylePoints(stylePoints);
 
-        // Knockback
-        if (hitDirection != Vector3.zero)
-            rb.AddForce(hitDirection.normalized * hitKnockback, ForceMode.Impulse);
-
-        // Hit flash
-        if (hitFX)
-            Instantiate(hitFX, transform.position + Vector3.up, Quaternion.identity);
-
-        // Notify style system
-        StyleBar styleBar = FindFirstObjectByType<StyleBar>();
-        if (styleBar) styleBar.AddStylePoints(stylePoints);
-
-        if (currentHealth <= 0f)
-            Die();
+        if (hp <= 0f) Die();
     }
 
     void Die()
     {
         isDead = true;
         state  = State.Dead;
-        rb.linearVelocity = Vector3.zero;
-
-        // Death: flip the whole model upside-down (toy topple)
+        StopAllCoroutines();
         StartCoroutine(DeathTumble());
 
-        // Score
         ScoreManager sm = FindFirstObjectByType<ScoreManager>();
         if (sm) sm.AddScore(scoreValue);
 
-        // Style
         StyleBar bar = FindFirstObjectByType<StyleBar>();
         if (bar) bar.OnEnemyKilled();
     }
@@ -319,64 +225,34 @@ public class DeerAI : MonoBehaviour
     IEnumerator DeathTumble()
     {
         float elapsed = 0f;
-        float duration = 0.5f;
         Quaternion startRot = transform.rotation;
-        Quaternion deadRot  = startRot * Quaternion.Euler(90f, Random.Range(-40f, 40f), 0);
+        Quaternion deadRot  = Quaternion.Euler(
+            transform.eulerAngles.x,
+            transform.eulerAngles.y + Random.Range(-40f, 40f),
+            90f);
 
-        while (elapsed < duration)
+        while (elapsed < 0.4f)
         {
             elapsed += Time.deltaTime;
-            transform.rotation = Quaternion.Slerp(startRot, deadRot, elapsed / duration);
+            transform.rotation = Quaternion.Slerp(startRot, deadRot, elapsed / 0.4f);
             yield return null;
         }
-
-        if (deathFX)
-            Instantiate(deathFX, transform.position + Vector3.up, Quaternion.identity);
-
+        if (deathFX) Instantiate(deathFX, transform.position + Vector3.up, Quaternion.identity);
         yield return new WaitForSeconds(1.5f);
         Destroy(gameObject);
     }
 
-    // Collision with player for tackle damage (fallback)
     void OnCollisionEnter(Collision col)
     {
-        if (isDead) return;
-        if (col.gameObject.CompareTag("Player") && deerType == DeerType.Normal)
+        if (isDead || deerType != DeerType.Normal) return;
+        if (col.gameObject.CompareTag("Player") && attackTimer <= 0f)
         {
             PlayerHealth ph = col.gameObject.GetComponent<PlayerHealth>();
-            if (ph && attackTimer <= 0f)
-            {
-                ph.TakeDamage(tackleDamage * 0.5f);
-                attackTimer = tackleCooldown * 0.5f;
-            }
+            if (ph) ph.TakeDamage(tackleDamage * 0.5f);
+            attackTimer = tackleCooldown * 0.5f;
         }
     }
 
-    // ── Public helpers ───────────────────────────────────────────
-    public float HealthPercent => currentHealth / maxHealth;
     public bool  IsDead        => isDead;
-
-    // Rotate only on the world Y axis, keeping the root's X tilt intact.
-    // Used because the prefab is spawned at X=-90 (model lies flat on ground).
-    Quaternion YLook(Vector3 dir)
-    {
-        dir.y = 0f;
-        if (dir.sqrMagnitude < 0.001f) return transform.rotation;
-        float yAngle = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
-        return Quaternion.Euler(transform.eulerAngles.x, yAngle, transform.eulerAngles.z);
-    }
-
-
-    IEnumerator LungeMove(Vector3 dir)
-    {
-        float duration = 0.2f;
-        float elapsed  = 0f;
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            transform.position += dir * 12f * Time.deltaTime;
-            yield return null;
-        }
-    }
-
+    public float HealthPercent => hp / maxHealth;
 }
