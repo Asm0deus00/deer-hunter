@@ -22,6 +22,10 @@ public class MainMenuManager : MonoBehaviour
     [Header("Scene to load when Play is clicked")]
     public int gameSceneIndex = 1;
 
+    [Header("Background image")]
+    [Tooltip("Import your PNG as Sprite (Texture Type: Sprite) and drag it here.")]
+    public Sprite backgroundSprite;
+
     [Header("Optional background music")]
     public AudioClip menuMusic;
 
@@ -90,9 +94,15 @@ public class MainMenuManager : MonoBehaviour
         brightnessOverlay.transform.SetAsFirstSibling();
         ApplyBrightnessOverlay(PlayerPrefs.GetFloat(KEY_BRIGHT, 1f));
 
-        // Dark background
-        var bg = MakeImage(cvGO, "MenuBG", new Color(0.04f, 0.07f, 0.04f, 0.88f));
+        // Background — sprite if assigned, solid colour fallback
+        var bg = MakeImage(cvGO, "MenuBG",
+            backgroundSprite != null ? Color.white : new Color(0.04f, 0.07f, 0.04f, 0.88f));
         bg.raycastTarget = false;
+        if (backgroundSprite != null)
+        {
+            bg.sprite         = backgroundSprite;
+            bg.preserveAspect = false;
+        }
         Stretch(bg.rectTransform);
 
         // Left accent stripe

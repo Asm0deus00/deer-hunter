@@ -86,6 +86,29 @@ public class DeerAI : MonoBehaviour
         shootTimer  -= Time.deltaTime;
         Tick();
         ToyLoco();
+        if (state != State.Dead) SnapToGround();
+    }
+
+    // Raycast down and stick the deer to whatever surface is below,
+    // ignoring all colliders on this GameObject and its children
+    void SnapToGround()
+    {
+        // Collect own colliders to ignore
+        Collider[] own = GetComponentsInChildren<Collider>();
+
+        Vector3 origin = transform.position + Vector3.up * 1.5f;
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 6f);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (var hit in hits)
+        {
+            bool isSelf = false;
+            foreach (var c in own) if (hit.collider == c) { isSelf = true; break; }
+            if (isSelf) continue;
+
+            transform.position = new Vector3(transform.position.x, hit.point.y + 0.5f, transform.position.z);
+            return;
+        }
     }
 
     // ── State machine ─────────────────────────────────────────────
@@ -202,10 +225,27 @@ public class DeerAI : MonoBehaviour
         hp -= amount;
         if (hitFX) Instantiate(hitFX, transform.position + Vector3.up, Quaternion.identity);
 
+        // Knockback — works on kinematic bodies via transform directly
+        if (hitDir != default && hitDir.sqrMagnitude > 0.001f)
+            StartCoroutine(Knockback(hitDir.normalized));
+
         StyleBar sb = FindFirstObjectByType<StyleBar>();
         if (sb) sb.AddStylePoints(stylePoints);
 
         if (hp <= 0f) Die();
+    }
+
+    IEnumerator Knockback(Vector3 dir)
+    {
+        float duration = 0.18f;
+        float elapsed  = 0f;
+        while (elapsed < duration && !isDead)
+        {
+            elapsed += Time.deltaTime;
+            float force = Mathf.Lerp(9f, 0f, elapsed / duration);
+            transform.position += dir * force * Time.deltaTime;
+            yield return null;
+        }
     }
 
     void Die()

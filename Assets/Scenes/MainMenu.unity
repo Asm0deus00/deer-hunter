@@ -338,6 +338,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MainMenuManager
   gameSceneIndex: 1
+  backgroundSprite: {fileID: 21300000, guid: 62da3cf29dd39c04387950bc36704f0e, type: 3}
   menuMusic: {fileID: 0}
 --- !u!4 &1560360912
 Transform:

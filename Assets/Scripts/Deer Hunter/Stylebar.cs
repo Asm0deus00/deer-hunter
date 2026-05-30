@@ -13,7 +13,7 @@ public class StyleBar : MonoBehaviour
 {
     // ── Rank data ────────────────────────────────────────────────
     static readonly string[] RankLabels     = { "D",    "C",    "B",      "A",        "S",       "SS",                "SSS"        };
-    static readonly string[] StyleWords     = { "DULL", "COOL", "BRUTAL", "ANARCHIC", "STYLISH!", "SMOKIN' SEXY STYLE!!", "☆ BUCK WILD ☆" };
+    static readonly string[] StyleWords     = { "DULL", "COOL", "BRUTAL", "ANARCHIC", "STYLISH!", "SMOKIN' SEXY STYLE!!", "** BUCK WILD **" };
     static readonly Color[]  RankColors     = {
         new Color(0.55f, 0.55f, 0.55f),  // D  grey
         new Color(0.25f, 0.55f, 1.00f),  // C  blue
